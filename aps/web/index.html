@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>新大地生产排程</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <header class="masthead"><div class="shell masthead-inner">
+    <a class="brand" href="#"><span class="brand-icon" aria-hidden="true">排</span><span>新大地生产排程</span></a>
+    <nav aria-label="主要导航"><a href="#import">数据</a><a href="#planning">排程</a><a href="#replanning">重排</a></nav>
+    <span class="local"><span></span>本地工作台</span>
+  </div></header>
+  <main class="shell">
+    <div class="intro"><div><h1>生产排程工作台</h1><p>核对净需求，比较产线计划，处理突发变更。</p></div><span id="dataName" class="dataset-name">待导入数据</span></div>
+
+    <section class="panel" id="import" aria-labelledby="importTitle">
+      <div class="section-head"><div><h2 id="importTitle">数据导入</h2><p>使用新大地排程工作簿，导入后可下载逐编码净需求对账。</p></div>
+      <a id="audit" class="button secondary" hidden>下载对账表</a></div>
+      <form id="importForm" class="import-form">
+        <label for="inputFile">排程工作簿 <input id="inputFile" type="file" accept=".xlsx" required></label>
+        <button type="submit">导入 Excel</button>
+      </form>
+      <div id="summary" class="stats" hidden></div>
+      <details id="issues" hidden><summary>数据异常</summary><div class="scroll-table"><table><thead><tr><th>类型</th><th>源工作表</th><th>行</th><th>编号</th><th>说明</th></tr></thead><tbody id="issueRows"></tbody></table></div></details>
+    </section>
+
+    <section class="panel" id="planning" aria-labelledby="planningTitle">
+      <div class="section-head"><div><h2 id="planningTitle">生成排产</h2><p>排产时点决定纳入哪些已接订单，规划结束时间决定可用窗口。</p></div></div>
+      <form id="planForm" class="form-row">
+        <label>排产时点 <input id="planAt" type="datetime-local" required></label>
+        <label>规划结束 <input id="planEnd" type="datetime-local" required></label>
+        <button id="runPlan" type="submit" disabled>生成排产方案</button>
+      </form>
+    </section>
+
+    <div id="notice" role="status" aria-live="polite" hidden></div>
+
+    <section id="results" aria-labelledby="resultsTitle" hidden>
+      <div class="panel">
+        <div class="section-head"><div><h2 id="resultsTitle">方案比较</h2><p id="resultMeta"></p></div><a id="export" class="button secondary">导出当前方案</a></div>
+        <div class="scroll-table comparison"><table class="compare"><thead><tr><th>方案</th><th>准交率</th><th>加权延期 (h)</th><th>换型 (h)</th><th>负载 CV</th><th>未排订单</th><th>补库缺口</th><th>调整任务</th></tr></thead><tbody id="planRows"></tbody></table></div>
+      </div>
+      <div class="panel">
+        <div class="section-head"><div><h2>产线甘特图</h2><p id="chosenMeta"></p></div>
+        <div class="controls"><label>产线 <select id="lineFilter"><option value="">全部</option></select></label>
+        <label>范围 <select id="timeFilter"><option value="all">全部作业</option><option value="7">排产起 7 天</option><option value="1">排产起 1 天</option><option value="window">规划窗口</option></select></label></div></div>
+        <div class="legend"><span><i class="planned"></i>计划</span><span><i class="frozen"></i>冻结</span><span><i class="running"></i>执行中</span><span><i class="completed"></i>已执行</span><span><i class="setup-dot"></i>换型</span></div>
+        <div class="gantt-scroll"><div id="gantt" aria-label="各产线计划"></div></div>
+        <p class="bar-detail" id="barDetail" aria-live="polite">选择甘特条查看作业明细。</p>
+      </div>
+      <div class="panel">
+        <div class="section-head"><div><h2>订单交付</h2><p id="orderCount"></p></div>
+          <div class="controls"><label>搜索 <input id="orderSearch" type="search" placeholder="订单、编码或客户"></label>
+            <label>状态 <select id="orderFilter"><option value="">全部</option><option>延期</option><option>未排完</option><option>库存覆盖</option><option>按期</option></select></label></div></div>
+        <div class="scroll-table tall"><table><thead><tr><th>订单</th><th>客户</th><th>产品编码</th><th>订单量</th><th>库存覆盖</th><th>已安排</th><th>交期</th><th>预计完工</th><th>状态</th></tr></thead><tbody id="orderRows"></tbody></table></div>
+        <details id="unassigned" open><summary>未排任务</summary><div class="scroll-table">
+          <table><thead><tr><th>任务</th><th>编码</th><th>型号</th><th>未排件数</th><th>原因</th></tr></thead><tbody id="unassignedRows"></tbody></table></div></details>
+      </div>
+    </section>
+
+    <section class="panel" id="replanning" aria-labelledby="replanTitle">
+      <div class="section-head"><div><h2 id="replanTitle">突发重排</h2><p id="baseLabel">生成并选择一个方案后即可开始重排。</p></div></div>
+      <fieldset id="replanControls" disabled>
+        <div class="form-row"><label>重排时点 <input id="eventAt" type="datetime-local"></label>
+          <label>冻结小时 <input type="number" id="freeze" min="0" max="48" value="8"></label></div>
+        <form id="eventForm" class="form-row"><label>事件类型 <select id="eventType">
+          <option value="insert">紧急插单</option><option value="fault">产线故障</option><option value="delay">物料延期</option></select></label>
+          <div id="eventFields" class="form-row"></div><button type="submit" class="secondary">加入事件</button></form>
+        <ul id="eventList" class="events" aria-label="待处理事件"></ul>
+        <button id="runReplan" type="button" disabled>生成重排方案</button>
+      </fieldset>
+      <ul id="changeList"></ul>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,44 @@
+name: newland-aps
+services:
+  database:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aps
+      POSTGRES_PASSWORD: ${APS_DB_PASSWORD:?Set APS_DB_PASSWORD in .env}
+      POSTGRES_DB: aps
+    volumes:
+      - aps_db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aps -d aps"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  migrate:
+    build: .
+    environment: &aps_env
+      APS_PRODUCT_DATABASE: postgresql+psycopg://aps:${APS_DB_PASSWORD_URL:?Set URL-encoded APS_DB_PASSWORD_URL in .env}@database/aps
+      APS_SECURE_COOKIE: ${APS_SECURE_COOKIE:-0}
+    depends_on:
+      database:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+  api:
+    build: .
+    restart: unless-stopped
+    environment: *aps_env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports: ["127.0.0.1:${APS_HTTP_PORT:-8010}:8010"]
+    command: ["uvicorn", "aps.product.api:from_env", "--factory", "--host", "0.0.0.0", "--port", "8010"]
+  worker:
+    build: .
+    restart: unless-stopped
+    environment: *aps_env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "-m", "aps.product", "worker"]
+volumes:
+  aps_db:
